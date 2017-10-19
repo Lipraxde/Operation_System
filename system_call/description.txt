@@ -1,0 +1,28 @@
+sys_call.c:
+
+這份程式會輸出執行它的user的ID。
+|------------------------------------|
+|#include <stdio.h>                  |
+|#include <stdlib.h>                 |
+|#include <unistd.h>                 |
+|                                    |
+|int main(int argc, char *argv[])    |
+|{                                   |
+|                                    |
+|    printf("UID = %u\n", getuid()); |
+|                                    |
+|    return 0;                       |
+|}                                   |
+|------------------------------------|
+
+getuid:
+
+getuid 宣告在 unistd.h
+開啟unistd.h來看
+|---------------------------------------------------|
+|/* Get the real user ID of the calling process.  */|
+|extern __uid_t getuid (void) __THROW;              |
+|---------------------------------------------------|
+
+getuid會獲得呼叫它的user的ID。
+
