@@ -1,3 +1,3 @@
-/root/os/hello.ko
-/root/os/hello.o
+/home/pi/Operation_System/os/hello.ko
+/home/pi/Operation_System/os/hello.o
 
