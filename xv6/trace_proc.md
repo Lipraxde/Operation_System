@@ -1,7 +1,7 @@
 作業系統 作業2 trace xv6-public/proc.c 
 ===
 
-[Q1.function之間的關聯，可以用文字或流程圖說明。]()
+[Q1.function之間的關聯，可以用文字或流程圖說明。](#function之間的關聯)
 
 [Q2.每個function做了什麼事。](#各個fountion的介紹)
 
