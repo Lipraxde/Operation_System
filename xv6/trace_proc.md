@@ -1,17 +1,22 @@
 作業系統 作業2 trace xv6-public/proc.c 
 ===
 
-[Q1.function 之間的關聯，可以用文字或流程圖說明。]()
+[Q1.function之間的關聯，可以用文字或流程圖說明。]()
 
-[Q2.每個 function 做了什麼事。](#各個fountion的介紹)
+[Q2.每個function做了什麼事。](#各個fountion的介紹)
 
-[Q3.利用 xv6 的 source code 說明其 scheduler 是用哪種排程方法。](#scheduler的排程方法)
+[Q3.利用xv6的source code說明其scheduler是用哪種排程方法。](#scheduler的排程方法)
 
-[Q4.說明 sv6 在 kernel thread 和 scheduler thread 之間進行 context switch 的機制。](#context-switch如何進行的)
+[Q4.說明xv6在kernel thread和scheduler thread之間進行context switch的機制。](#context-switch如何進行的)
+
+## function之間的關聯
+### pinit()
+與xv6/spinlock.c/initlock()有關
+### allocproc()
 
 ## 數據結構
 ### proc.h
-首先要看懂proc.h裡的cpu、context、proc的struct，這樣看proc.c的時候才會知道程式具體在做什麼。
+首先要看懂 proc.h 裡的 cpu、context、proc 的 struct ，這樣看 proc.c 的時候才會知道程式具體在做什麼。
 ```c
 struct cpu {
   uchar apicid; // Local APIC ID
@@ -27,16 +32,16 @@ struct cpu {
   struct proc *proc; // The currently−running process.
   };
 ```
-struct cpu儲存關於CPU的訊息，包含有：
-* APIC ID，APIC(Advanced Programmable Interrupt Controller)的ID
-* scheduler，scheduler()的context資訊
-* ts，stack的位置
-* gdt，存gdt(global descriptor table)
-* started，CPU是否啟動
-* ncli，pushcli()的深度
-* intena，pushcli()前是否有致能中斷？
+struct cpu 儲存關於 CPU 的訊息，包含有：
+* APIC ID，APIC(Advanced Programmable Interrupt Controller) 的ID
+* scheduler，scheduler() 的 context 資訊
+* ts，stack 的位置
+* gdt，存 gdt(global descriptor table)
+* started，CPU 是否啟動
+* ncli，pushcli() 的深度
+* intena，pushcli() 前是否有致能中斷？
 * \*cpu，拿來存自己？看不出來幹嘛用
-* \*proc，目前正在執行的process
+* \*proc，目前正在執行的 process
 ```c
 struct proc {
   uint sz; // Size of process memory (bytes)
@@ -54,20 +59,20 @@ struct proc {
   char name[16]; // Process name (debugging)
 };
 ```
-struct proc儲存關於process的訊息，包含有：
-* sz，這個process所擁有的memory大小
-* pgdir，process的page table
-* kstack，這個process的stack最底部的位置
-* state，這個process的狀態
+struct proc 儲存關於 process 的訊息，包含有：
+* sz，這個 process 所擁有的 memory 大小
+* pgdir，process 的 page table
+* kstack，這個 process 的 stack 最底部的位置
+* state，這個 process 的狀態
 * pid，Process ID
-* parent，父process
-* tf，Trap frame，呼叫system call會用到吧？看不出它怎麼運作
-* context，process的context資訊
-* chan，跟sleeping()、wakeup()有關，看code像是一個門牌號碼一樣，process可以到某個房子裡休息，wakeup()會叫醒那個房子裡所有的process
-* killed，不是0的話process就會被kill
+* parent，父 process
+* tf，Trap frame，呼叫 system call 會用到吧？看不出它怎麼運作
+* context，process 的 context 資訊
+* chan，跟 sleeping()、wakeup() 有關，看 code 像是一個門牌號碼一樣，process 可以到某個房子裡休息，wakeup() 會叫醒那個房子裡所有的 process
+* killed，不是0的話 process 就會被 kill
 * ofile，開啟的檔案
 * cwd，目前所在的目錄
-* name，process的名子
+* name，process 的名子
 ```c
 struct context {
   uint edi;
@@ -77,7 +82,7 @@ struct context {
   uint eip;
 };
 ```
-context儲存context switch會用到的register，xv6跑在使用x86指令集的CPU上。
+context 儲存 context switch會用到的register，xv6跑在使用x86指令集的CPU上。
 ```c
 extern struct cpu cpus[NCPU];
 extern int ncpu;
@@ -142,6 +147,7 @@ wakeup1()會在ptable中尋找p->chan==chan且處於SLEEPING狀態的process，�
 
 ## scheduler的排程方法
 xv6的scheduler()使用的排程方法為Round-robin scheduling。
+
 搜尋處於RUNNABLE的process是使用O(n)線性的搜尋法。
 ```c
 void
@@ -180,6 +186,7 @@ scheduler(void)
 scheduler()內部是一個無窮迴圈，不斷地sti() → acquire(&ptable.lock) → find process → context switch → release(&ptable.lock)
 ### sti()
 我目前不太清楚scheduler為何在無窮迴圈內要有sti()，xv6有兩個操作pushcli()、popcli()，這兩個會在switchuvm()、acquire()、release()用到，在switchuvm()中的pushcli()、popcli()是成對的，目的是為了避免切換page table時發生中斷，可能會出問題，而acquire()、release()分別使用pushcli()、popcli()，因為如果同時acquire()兩個鎖，就需要有兩次release()，為了避免release()一次就使interrupt enable，使用pushcli()幾次，相對地就要使用popcli()幾次才能使中斷致能回到原本的狀態。
+
 因此對於無窮迴圈內有了個sti()就變得很奇怪，目的是為了使每次進行context switch時可以確保interrupt enable，但pushcli()、popcli()使得cli()、sti()可以成對出現，照理來說每次context switch回scheduler()時interrupt都會處在enable的狀態下，不需要在設定一次阿。
 ### acquire(&ptable.lock)
 取得ptable的鎖(因為其他CPU也同是有自己的schduler()在執行，可是ptable是共用的)，以便進入接下來的critical section。
@@ -228,7 +235,9 @@ switchkvm();
 proc = 0;
 ```
 在更新proc為find process找到的process後，馬上呼叫了switchuvm()，將page table切換為process的，然後在呼叫switch()交換CPU的regsiter。在呼叫switch()後就會切換到process去執行了。
+
 之後要切換成另一個process時，會透過sched()切換回scheduler()。
+
 這邊註解寫到process要將ptable解鎖，然後在跳回scheduler()前要把ptable鎖回去。
 #### sched()的解說
 ```c
@@ -276,6 +285,7 @@ swtch()：切換CUP的重要regsiter
 * 從user(process)切換回kernel(scheduler)
 #### 從kernel切換到user
 假設我們有已經建立好的process(不考慮新創的process第一次執行怎麼從forkret、trapret退出並執行program)，而CPU目前正在執行scheduler()，尋找下一個可執行的process。
+
 那我們會依序進行
 1. 找到可以執行的process
 2. switchuvm()設定CPU的GDT並將process的page table載入(切換成使用process的virtual memory)
@@ -300,9 +310,13 @@ swtch()：切換CUP的重要regsiter
 
 
 幾個問題：
+
 為什麼context switch時先切換了page table可是還是可以修改p->state？這個時候雖然esp還沒有被改變，但是原本的esp指向的位置應該應為page table改變而變到其他地方去了，這樣子呼叫swthc()沒問題嗎？
+
 switchkvm()裡面沒有再載入kernel的GDT，在哪裡解決了這個問題？
+
 為什麼scheduler()裡要有sti()？照道理來說在最後popcli()時就會回到原本的中斷狀態了，有需要特別一直重新enable嗎？
+
 sched()裡面為什麼要備份cpu−>intena？照理來說scheduler()裡面的無窮迴圈會不斷地sti()後acquire，應該是所有的cpu->intena都是處於可中斷的狀態，即使context switch後執行的CPU不同應該也不影響。註解寫的看不懂：
 ```
 Enter scheduler. Must hold only ptable.lock and have changed proc−>state.
@@ -310,6 +324,9 @@ Saves and restores intena because intena is a property of this kernel thread, no
 It should be proc−>intena and proc−>ncli, but that would break in the few places where a lock is held but there’s no process.
 ```
 還沒了解的地方：
+
 system call的機制
+
 interrupt enable/disable的機制
+
 製造新的process的機制(如何載入user program執行)
