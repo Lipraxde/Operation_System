@@ -1,8 +1,12 @@
 作業系統 作業2 trace xv6-public/proc.c 
 ===
+
 [Q1.function 之間的關聯，可以用文字或流程圖說明。]()
+
 [Q2.每個 function 做了什麼事。](#各個fountion的介紹)
+
 [Q3.利用 xv6 的 source code 說明其 scheduler 是用哪種排程方法。](#scheduler的排程方法)
+
 [Q4.說明 sv6 在 kernel thread 和 scheduler thread 之間進行 context switch 的機制。](#context-switch如何進行的)
 
 ## 數據結構
@@ -205,8 +209,10 @@ context switch的開始會將proc設為p(find process所找到的process)並作�
 
 ## context switch如何進行的
 這牽扯到scheduler()、trap()、yield()、sched()，還有一些比較底層的function：switchuvm()、switchkvm()、swtch()。
-### scheduler細部解說
-我們首先先來看scheduler這邊
+我們要先了解這些function的作用。
+### function功能
+#### scheduler()解說
+我們首先先來看scheduler()這邊
 ```c
 // Switch to chosen process. It is the process’s job
 // to release ptable.lock and then reacquire it
@@ -224,7 +230,7 @@ proc = 0;
 在更新proc為find process找到的process後，馬上呼叫了switchuvm()，將page table切換為process的，然後在呼叫switch()交換CPU的regsiter。在呼叫switch()後就會切換到process去執行了。
 之後要切換成另一個process時，會透過sched()切換回scheduler()。
 這邊註解寫到process要將ptable解鎖，然後在跳回scheduler()前要把ptable鎖回去。
-### sched的細部解說
+#### sched()的解說
 ```c
 void
 sched(void)
@@ -244,8 +250,8 @@ sched(void)
   cpu−>intena = intena;
 }
 ```
-sched()會先做一系列的檢查動作：ptable要是鎖上的、ncli深度為1層、必須處於無法中斷的狀態，接著它會備份cpu−>intena後才呼叫swtch()切換至scheduler(從scheduler切換出來的地方重新開始)，當這個process重新被scheduler選出來執行時，就會從這邊開始。
-### yield的細部解說
+sched()會先做一系列的檢查動作：ptable要是鎖上的、ncli深度為1層、必須處於無法中斷的狀態，接著它會備份cpu−>intena後才呼叫swtch()切換至scheduler()(從scheduler切換出來的地方重新開始)，當這個process重新被scheduler()選出來執行時，就會從這邊開始。
+#### yield()的解說
 ```c
 void
 yield(void)
@@ -256,42 +262,54 @@ yield(void)
   release(&ptable.lock);
 }
 ```
-會先將ptable上鎖、process的state改成RUNNABLE(這樣下次scheduler()才會再選到它)後才進入sched()。從sched()出來後會再把ptable解鎖。為什麼要做上鎖解鎖的動作，是因為如果呼叫swtch()沒有上鎖的話，在yield()時會需要先將process的state設成RUNNABLE，還沒有swtch()回scheduler前，其他CPU可能會將這個process拿去執行，這樣就會造成有兩顆CUP在同一個stack上跑。
-### trap
-trap看起來是會定期幫process呼叫yield，讓process不會一直占用CUP。另外它還負責檢查process的killed，如果killed!=0的話就會幫這支process呼叫exit()。
-### switchuvm()、switchkvm()、swtch()
+會先將ptable上鎖、process的state改成RUNNABLE(這樣下次scheduler()才會再選到它)後才進入sched()。從sched()出來後會再把ptable解鎖。為什麼要做上鎖解鎖的動作，是因為如果呼叫swtch()沒有上鎖的話，在yield()時會需要先將process的state設成RUNNABLE，還沒有swtch()回scheduler()前，其他CPU可能會將這個process拿去執行，這樣就會造成有兩顆CUP在同一個stack上跑。
+#### trap
+trap()看起來是會定期幫process呼叫yield()，讓process不會一直占用CUP。另外它還負責檢查process的killed，如果killed!=0的話就會幫這支process呼叫exit()。
+trap()應該是被設定成每100ms會經由timer中斷進入的，不過我看不懂trap()是在哪裡被設定的。
+#### switchuvm()、switchkvm()、swtch()
 switchuvm()：切換至user mode的GDT、載入process的page table
 switchkvm()：載入kernel的page table
 swtch()：切換CUP的重要regsiter
+### context switch切換流程
+我們可以把context switch看成兩個動作：
+* 從kernel(scheduler)切換到user(process)
+* 從user(process)切換回kernel(scheduler)
+#### 從kernel切換到user
+假設我們有已經建立好的process(不考慮新創的process第一次執行怎麼從forkret、trapret退出並執行program)，而CPU目前正在執行scheduler()，尋找下一個可執行的process。
+那我們會依序進行
+1. 找到可以執行的process
+2. switchuvm()設定CPU的GDT並將process的page table載入(切換成使用process的virtual memory)
+3. 呼叫swtch()，切換到process的CUP regsiter
+4. 從sched()中的swtch()返回
+5. 從sched()返回到yield()
+6. yield()將ptable解鎖、返回trap()
+7. 從trap()返回之前process執行的地方
+注意從第3個步驟到第4個步驟時，CPU已經在不同的stack上執行了，所以並不會從scheduler()裡的swtch()返回。
+#### 從user切換回kernel
+1. 經過100ms從trap呼叫yield()→步驟2。呼叫exit()這個system call，在裡面進行一些exit的前置處理後呼叫sched()→步驟3
+2. 在yield()中將ptable上鎖呼叫sched()
+3. sched()檢查完後呼叫swtch()，切換到scheduler()的regsiter
+4. 從scheduler()中的swtch()返回
+5. switchkvm載入kernel的pagetable
+6. 繼續找下一個可以執行的process
 
 
-trap()在trap.c裡，它會定期呼叫yield()(每100ms一次)，yield()會把ptable上鎖，後呼叫sched()，sched()做一些檢查動作後會呼叫swtch()
 
 
 
 
 
-
-
-
-
-trap會檢查process的killed狀態，如果process的killed!=0，則會幫它呼叫exit()，由parent呼叫wait()來做回收的動作。
-
-
-兩個問題：
+幾個問題：
 為什麼context switch時先切換了page table可是還是可以修改p->state？這個時候雖然esp還沒有被改變，但是原本的esp指向的位置應該應為page table改變而變到其他地方去了，這樣子呼叫swthc()沒問題嗎？
 switchkvm()裡面沒有再載入kernel的GDT，在哪裡解決了這個問題？
 為什麼scheduler()裡要有sti()？照道理來說在最後popcli()時就會回到原本的中斷狀態了，有需要特別一直重新enable嗎？
 sched()裡面為什麼要備份cpu−>intena？照理來說scheduler()裡面的無窮迴圈會不斷地sti()後acquire，應該是所有的cpu->intena都是處於可中斷的狀態，即使context switch後執行的CPU不同應該也不影響。註解寫的看不懂：
 ```
-Enter scheduler. Must hold only ptable.lock and have changed proc−>state. Saves and restores intena because intena is a property of this kernel thread, not this CPU. It should be proc−>intena and proc−>ncli, but that would break in the few places where a lock is held but there’s no process.
+Enter scheduler. Must hold only ptable.lock and have changed proc−>state.
+Saves and restores intena because intena is a property of this kernel thread, not this CPU.
+It should be proc−>intena and proc−>ncli, but that would break in the few places where a lock is held but there’s no process.
 ```
-
-
- 
-
-說明process的產生、切換、終止所會呼叫到的function之間的呼叫關係在後面會說明。
-
-
-**getuid**會獲得呼叫它的user的ID。
-
+還沒了解的地方：
+system call的機制
+interrupt enable/disable的機制
+製造新的process的機制(如何載入user program執行)
