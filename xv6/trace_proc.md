@@ -11,8 +11,43 @@
 
 ## function之間的關聯
 ### pinit()
-與xv6/spinlock.c/initlock()有關
+與xv6/spinlock.c/initlock()有關。
+### cpuid()
+與mycpu()有關。
+### mycpu()
+與panic()、lapicid()有關。
+### myproc()
+與pushcli()、mycpu()有關。
 ### allocproc()
+與acquire()、release()、memset()有關。
+### userinit()
+與allocproc()、setupkvm()、panic()、inituvm()、memset()、safestrcpy()、acquire()、release()有關。
+### growproc()
+與myproc()、allocuvm()、deallocuvm()、switchuvm()有關。
+### fork()
+與myproc()、allocproc()、copyuvm()、kfree()、filedup()、idup()、safestrcpy()、acquire()、release()有關。
+### exit()
+與myproc()、panic()、fileclose()、begin\_op()、iput()、end\_op()、acquire()、wakeup1()、sched()、panic()有關。
+### wait()
+與acquire()、kfree()、freevm()、release()、sleep()有關。
+### scheduler()
+與mycpu()、sti()、acquire()、switchuvm()、swtch()、switchkvm()、release()有關。
+### sched()
+與myproc()、holding()、panic()、readeflags()、swtch()、mycpu()有關。
+### yield()
+與acquire()、myproc()、sched()、release()有關。
+### forkret()
+與release()、iinit()、initlog()有關。
+### sleep()
+與myproc()、panic()、acquire()、release()、sched()有關。
+### wakeup1()
+他自己可以的！
+### wakeup()
+與acquire()、wakeup1()、release()有關。
+### kill()
+與acquire()、release()有關。
+### procdump()
+與NELEM()、cprintf()、getcallerpcs()有關。
 
 ## 數據結構
 ### proc.h
@@ -114,12 +149,18 @@ nextpid則是存下一個process創建時所獲得的PID
 ## 各個fountion的介紹
 ### void pinit(void);
 初始化ptable用的，會呼叫initlock()來初始化ptable裡的自旋鎖。
+### cpuid()
+利用mycpu()-cpus來取得目前執行在哪顆CPU上。
+### mycpu()
+會回傳目前CPU的pointer。
+### myproc()
+透過mycpu()得到的CPU pointer來抓CPU目前執行的process。
 ### static struct proc\* allocproc(void);
 allocproc的用途是在ptable裡面找到一個空位(UNUSED)來存放新的process結構。找到後將那個空的位置的state設置為EMBRYO、配置stack空間給它、將trapret()、forkret()壓入stack，並將nextpid+1。
 ### void userinit(void);
-userinit會產生第一個process。它首先呼叫allocproc()來產生一個process的雛形，並分配pgdir給process，設定name、tf、cwd、state
+userinit會產生第一個process。它首先呼叫allocproc()來產生一個process的雛形，並分配pgdir給process，設定name、tf、cwd、state。
 ### int growproc(int n);
-growproc用來增加或減少目前process可以存取的memory大小。它會先alloc一塊新的user virtual memory，接著使用switchuvm()更新改變的page table
+growproc用來增加或減少目前process可以存取的memory大小。它會先alloc一塊新的user virtual memory，接著使用switchuvm()更新改變的page table。
 ### int fork(void);
 fork用途為複製一個process出來。利用allocproc()獲得process的雛形後，將原本的process的內容複製一份出來。
 ### void exit(void);
