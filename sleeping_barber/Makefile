@@ -1,4 +1,4 @@
-OUTEXE = main
+OUTEXE = sleeping_barber
 
 .PHONY : all build clean
 

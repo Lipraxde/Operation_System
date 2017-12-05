@@ -167,68 +167,16 @@ void *thread_customer(void *_self)
         printf("Barbershop is full, customer %p leave.\n", self);
 
     assert(pthread_mutex_unlock(&(self->mutex))==0);
-    destory_customer(self);
-    pthread_exit(NULL);
-}
-
-
-pthread_mutex_t mutex_mem;
-void *me_malloc(size_t size)
-{
-    void *temp = 0;
-    pthread_mutex_lock(&mutex_mem);
-    temp = malloc(size);
-    pthread_mutex_unlock(&mutex_mem);
-    return temp;
-}
-
-void me_free(void *target)
-{
-    pthread_mutex_lock(&mutex_mem);
-    free(target);
-    pthread_mutex_unlock(&mutex_mem);
-}
-
-void *test(void *p)
-{
-    assert(pthread_detach(pthread_self())==0);
-    me_free(p);
-    pthread_exit(p);
+    pthread_exit(self);
 }
 
 
 int main(int argc, char *argv[])
 {
-    pthread_t tid[500];
-    void *p;
-    void *ret_p;
-    // void *ret_p;
-    pthread_mutex_init(&mutex_mem, NULL);
-    // while(1)
-    for(int i=0;i<500;i++)
-    {
-        p = me_malloc(1024*1024);
-        assert(p!=NULL);
-        //printf("Pointer p = %p\n", p);
-        assert(pthread_create(&(tid[i]), NULL, test, p)==0);
-        // assert(pthread_join(tid, &ret_p)==0);
-        sleep(0);
-    }
-    for(int i=0;i<500;i++)
-    {
-        // assert(pthread_join(tid[i], &ret_p)==0);
-        // me_free(ret_p);
-    }
-    // return 0;
-    printf("Finish.\n");
-    while(1) sleep(0);
-
-
-
     printf("Input how many barbers and how many chair?\n");
-    printf("(Default 2 barbers, 10 chairs)\n");
+    printf("(Default 1 barbers, 10 chairs)\n");
     scanf("%d %d", &NUM_BARBERS, &NUM_CHAIRS);
-    if(!NUM_BARBERS) NUM_BARBERS = 2;
+    if(!NUM_BARBERS) NUM_BARBERS = 1;
     if(!NUM_CHAIRS) NUM_CHAIRS = 10;
     free_chair = NUM_CHAIRS;
 
@@ -249,30 +197,46 @@ int main(int argc, char *argv[])
     }
 
 
+    int n_customer = 0;
+    pthread_t *tid_customer;
+    int tid_count = 10;
+    struct customer *new_customer;
+    void *resource_customer;
+
+    tid_customer = malloc(tid_count*sizeof(pthread_t));
+
     while(1)
     {
-        int n_customer = 0;
-        pthread_t tid_customer;
-        struct customer *new_customer;
-
         printf("How many customers?\n");
+
         scanf("%d", &n_customer);
+
+        if(tid_count<n_customer)
+            tid_customer = realloc(tid_customer,
+                                   n_customer*sizeof(pthread_t));
+
         for(int i=0;i<n_customer;i++)
         {
             new_customer = create_customer();
-            pthread_create(&tid_customer, NULL,
+            pthread_create(&(tid_customer[i]), NULL,
                            thread_customer, new_customer);
-            pthread_detach(tid_customer);
         }
-        sleep(1);
-        intptr_t p = 1;
-        while(p)
+
+        for(int i=0;i<n_customer;i++)
         {
-            p = 0;
-            for(int i=0;i<NUM_BARBERS;i++)
-                p = (intptr_t)barbers[i].cut_who|p;
-            sleep(0);
+            assert(pthread_join(tid_customer[i], &resource_customer)==0);
+            destory_customer(resource_customer);
         }
+        // Use pthread_join(), not need test.
+        // sleep(1);
+        // intptr_t p = 1;
+        // while(p)
+        // {
+        //     p = 0;
+        //     for(int i=0;i<NUM_BARBERS;i++)
+        //         p = (intptr_t)barbers[i].cut_who|p;
+        //     sleep(0);
+        // }
     }
     return 0;
 }
