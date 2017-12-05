@@ -1,11 +1,13 @@
-OUTEXE = sleeping_barber
+OUTEXE = main
 
 .PHONY : all build clean
+
+cc = gcc
 
 all: build
 
 build: main.c
-	cc $^ -lpthread -o $(OUTEXE)
+	cc $^ -g -lpthread -o $(OUTEXE)
 
 clean:
 	rm $(OUTEXE)

@@ -1,5 +1,6 @@
 #include <assert.h>
 #include <pthread.h>
+#include <semaphore.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -7,12 +8,10 @@
 int NUM_CHAIRS;
 int NUM_BARBERS;
 
-enum barber_state { SLEEPING, CUTTING };
 int free_chair;
 
 struct customer
 {
-    pthread_t tid;
     pthread_mutex_t mutex;
     struct customer *self;
     struct customer *next;
@@ -26,7 +25,6 @@ struct customer *create_customer(void)
     struct customer *temp;
     temp = malloc(sizeof(struct customer));
     assert(temp!=NULL);
-    temp->tid = 0;
     pthread_mutex_init(&(temp->mutex), NULL);
     pthread_mutex_lock(&(temp->mutex));
     temp->self = temp;
@@ -83,33 +81,35 @@ struct customer *get_customer(void)
 struct barber
 {
     pthread_t tid;
-    pthread_mutex_t mutex;
     struct customer *cut_who;
 };
+pthread_mutex_t mutex_barber_count;
+int barber_count;
+sem_t sem_barber;
 struct barber *barbers;
 
+
 int wakeup_barber(void)
-{
-    static int i = 0;
-    int j = i;
-    int get = 0;
-    do
+{ 
+    pthread_mutex_lock(&mutex_barber_count);
+    if(barber_count>0)
     {
-        i = (i + 1) % NUM_BARBERS;
-        if(barbers[i].cut_who==NULL)
-        {
-            get = 1;
-            break;
-        }
-    } while(i!=j);
-    if(get)
-    {
-        barbers[i].cut_who = get_customer();
-        pthread_mutex_unlock(&(barbers[i].mutex));
+        sem_post(&sem_barber);
+        barber_count--;
+        pthread_mutex_unlock(&mutex_barber_count);
         return 1;   // A barber is awakened.
     }
     else
-        return 0;   // All barbers are busy.
+        pthread_mutex_unlock(&mutex_barber_count);
+    return 0;   // All barbers are busy.
+}
+
+void sleep_barber(struct barber *target)
+{
+    pthread_mutex_lock(&mutex_barber_count);
+    barber_count++;
+    pthread_mutex_unlock(&mutex_barber_count);
+    sem_wait(&sem_barber);
 }
 
 struct barber *init_barbers(int n)
@@ -120,8 +120,6 @@ struct barber *init_barbers(int n)
     for(int i=0;i<n;i++)
     {
         temp->tid = 0;
-        pthread_mutex_init(&(temp[i].mutex), NULL);
-        pthread_mutex_lock(&(temp[i].mutex));
         temp->cut_who = NULL;
     }
     return temp;
@@ -134,16 +132,17 @@ void *thread_barber(void *_self)
 
     while(1)
     {
-        pthread_mutex_lock(&(self->mutex));
+        sleep_barber(self);
         printf("Barber %p wake up.\n", self);
+        self->cut_who = get_customer();
         while(self->cut_who)
         {
             // cutting hair
             printf("Barber %p cuts customer %p's hair.\n",
                    self, self->cut_who);
             sleep(1);
-            pthread_mutex_unlock(&(self->cut_who->mutex));
 
+            pthread_mutex_unlock(&(self->cut_who->mutex));
             self->cut_who = get_customer();
         }
         printf("Barber %p sleep.\n", self);
@@ -166,12 +165,32 @@ void *thread_customer(void *_self)
         printf("Barbershop is full, customer %p leave.\n", self);
 
     destory_customer(self);
-    return NULL;
+    pthread_exit(NULL);
+}
+
+void *test(void *p)
+{
+    pthread_exit(0);
+
 }
 
 
 int main(int argc, char *argv[])
 {
+
+
+    while(1)
+    {
+        pthread_t tid;
+        pthread_create(&tid, NULL,
+                       test, NULL);
+        pthread_detach(tid);
+        sleep(0);
+    }
+
+
+
+
     printf("Input how many barbers and how many chair?\n");
     printf("(Default 2 barbers, 10 chairs)\n");
     scanf("%d %d", &NUM_BARBERS, &NUM_CHAIRS);
@@ -179,7 +198,11 @@ int main(int argc, char *argv[])
     if(!NUM_CHAIRS) NUM_CHAIRS = 10;
     free_chair = NUM_CHAIRS;
 
+    barber_count = 0;   // Will add at barber go sleeping.
     barbers = init_barbers(NUM_BARBERS);
+    pthread_mutex_init(&mutex_barber_count, NULL);
+    sem_init(&sem_barber, 0, 0);
+
     waiting_customer= NULL;
     last_customer = NULL;
     pthread_mutex_init(&mutex_customer_list, NULL);
@@ -191,17 +214,21 @@ int main(int argc, char *argv[])
         printf("Create barber %p.\n", &(barbers[i]));
     }
 
+
     while(1)
     {
         int n_customer = 0;
-        struct customer *who_going_barbershop;
+        pthread_t tid_customer;
+        struct customer *new_customer;
+
         printf("How many customers?\n");
         scanf("%d", &n_customer);
         for(int i=0;i<n_customer;i++)
         {
-            who_going_barbershop = create_customer();
-            pthread_create(&(who_going_barbershop->tid) , NULL,
-                           thread_customer, who_going_barbershop);
+            new_customer = create_customer();
+            pthread_create(&tid_customer, NULL,
+                           thread_customer, new_customer);
+            pthread_detach(tid_customer);
         }
         sleep(1);
         intptr_t p = 1;
