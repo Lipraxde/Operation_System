@@ -193,25 +193,31 @@ void *test(void *p)
 {
     assert(pthread_detach(pthread_self())==0);
     me_free(p);
-    pthread_exit(NULL);
+    pthread_exit(p);
 }
 
 
 int main(int argc, char *argv[])
 {
-    pthread_t tid;
+    pthread_t tid[500];
     void *p;
+    void *ret_p;
     // void *ret_p;
     pthread_mutex_init(&mutex_mem, NULL);
     // while(1)
-    for(int i=0;i<50000;i++)
+    for(int i=0;i<500;i++)
     {
-        p = me_malloc(8*1024*1024);
+        p = me_malloc(1024*1024);
         assert(p!=NULL);
         //printf("Pointer p = %p\n", p);
-        assert(pthread_create(&tid, NULL, test, p)==0);
+        assert(pthread_create(&(tid[i]), NULL, test, p)==0);
         // assert(pthread_join(tid, &ret_p)==0);
         sleep(0);
+    }
+    for(int i=0;i<500;i++)
+    {
+        // assert(pthread_join(tid[i], &ret_p)==0);
+        // me_free(ret_p);
     }
     // return 0;
     printf("Finish.\n");
