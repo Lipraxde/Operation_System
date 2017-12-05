@@ -12,6 +12,7 @@ int free_chair;
 
 struct customer
 {
+    // sem_t sem_customer;
     pthread_mutex_t mutex;
     struct customer *self;
     struct customer *next;
@@ -25,8 +26,9 @@ struct customer *create_customer(void)
     struct customer *temp;
     temp = malloc(sizeof(struct customer));
     assert(temp!=NULL);
-    pthread_mutex_init(&(temp->mutex), NULL);
-    pthread_mutex_lock(&(temp->mutex));
+    // sem_init(&, 0, 0);
+    assert(pthread_mutex_init(&(temp->mutex), NULL)==0);
+    assert(pthread_mutex_lock(&(temp->mutex))==0);
     temp->self = temp;
     temp->next = NULL;
     return temp;
@@ -34,13 +36,13 @@ struct customer *create_customer(void)
 
 void destory_customer(struct customer *target)
 {
-    pthread_mutex_destroy(&(target->mutex));
+    assert(pthread_mutex_destroy(&(target->mutex))==0);
     free(target);
 }
 
 int add_customer(struct customer *cust)
 {
-    pthread_mutex_lock(&mutex_customer_list);
+    assert(pthread_mutex_lock(&mutex_customer_list)==0);
     
     if(free_chair>0)
     {
@@ -53,11 +55,11 @@ int add_customer(struct customer *cust)
     }
     else
     {
-        pthread_mutex_unlock(&mutex_customer_list);
+        assert(pthread_mutex_unlock(&mutex_customer_list)==0);
         return 0;   // The barbershop is full.
     }
 
-    pthread_mutex_unlock(&mutex_customer_list);
+    assert(pthread_mutex_unlock(&mutex_customer_list)==0);
     return 1;       // The customer can sit on chair.
 }
 
@@ -65,7 +67,7 @@ int add_customer(struct customer *cust)
 struct customer *get_customer(void)
 {
     struct customer *temp = NULL;
-    pthread_mutex_lock(&mutex_customer_list);
+    assert(pthread_mutex_lock(&mutex_customer_list)==0);
 
     if(waiting_customer)
     {
@@ -74,7 +76,7 @@ struct customer *get_customer(void)
         free_chair++;
     }
 
-    pthread_mutex_unlock(&mutex_customer_list);
+    assert(pthread_mutex_unlock(&mutex_customer_list)==0);
     return temp;
 }
 
@@ -91,24 +93,24 @@ struct barber *barbers;
 
 int wakeup_barber(void)
 { 
-    pthread_mutex_lock(&mutex_barber_count);
+    assert(pthread_mutex_lock(&mutex_barber_count)==0);
     if(barber_count>0)
     {
         sem_post(&sem_barber);
         barber_count--;
-        pthread_mutex_unlock(&mutex_barber_count);
+        assert(pthread_mutex_unlock(&mutex_barber_count)==0);
         return 1;   // A barber is awakened.
     }
     else
-        pthread_mutex_unlock(&mutex_barber_count);
+        assert(pthread_mutex_unlock(&mutex_barber_count)==0);
     return 0;   // All barbers are busy.
 }
 
 void sleep_barber(struct barber *target)
 {
-    pthread_mutex_lock(&mutex_barber_count);
+    assert(pthread_mutex_lock(&mutex_barber_count)==0);
     barber_count++;
-    pthread_mutex_unlock(&mutex_barber_count);
+    assert(pthread_mutex_unlock(&mutex_barber_count)==0);
     sem_wait(&sem_barber);
 }
 
@@ -142,7 +144,7 @@ void *thread_barber(void *_self)
                    self, self->cut_who);
             sleep(1);
 
-            pthread_mutex_unlock(&(self->cut_who->mutex));
+            assert(pthread_mutex_unlock(&(self->cut_who->mutex))==0);
             self->cut_who = get_customer();
         }
         printf("Barber %p sleep.\n", self);
@@ -158,36 +160,60 @@ void *thread_customer(void *_self)
     if(add_customer(self))
     {
         wakeup_barber();
-        pthread_mutex_lock(&(self->mutex));
+        assert(pthread_mutex_lock(&(self->mutex))==0);
         printf("Customer %p have cut hair.\n", self);
     }
     else
         printf("Barbershop is full, customer %p leave.\n", self);
 
+    assert(pthread_mutex_unlock(&(self->mutex))==0);
     destory_customer(self);
     pthread_exit(NULL);
 }
 
 void *test(void *p)
 {
-    pthread_exit(0);
+    assert(pthread_detach(pthread_self())==0);
+    free(p);
+    pthread_exit(NULL);
+}
 
+pthread_mutex_t mutex_mem;
+void *me_malloc(size_t size)
+{
+    void *temp = 0;
+    pthread_mutex_lock(&mutex_mem);
+    temp = malloc(size);
+    pthread_mutex_unlock(&mutex_mem);
+    return temp;
+}
+
+void me_free(void *target)
+{
+    pthread_mutex_lock(&mutex_mem);
+    me_free(target);
+    pthread_mutex_unlock(&mutex_mem);
 }
 
 
 int main(int argc, char *argv[])
 {
-
-
-    while(1)
+    pthread_t tid;
+    void *p;
+    // void *ret_p;
+    pthread_mutex_init(&mutex_mem, NULL);
+    // while(1)
+    for(int i=0;i<10;i++)
     {
-        pthread_t tid;
-        pthread_create(&tid, NULL,
-                       test, NULL);
-        pthread_detach(tid);
+        p = me_malloc(8*1024*1024);
+        assert(p!=NULL);
+        // printf("Pointer p = %p\n", p);
+        assert(pthread_create(&tid, NULL, test, p)==0);
+        // assert(pthread_join(tid, &ret_p)==0);
         sleep(0);
     }
-
+    return 0;
+    while(1) sleep(0);
 
 
 
